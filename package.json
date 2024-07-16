@@ -8,6 +8,8 @@
   },
   "files": [
     "index.js",
+    "apple.h",
+    "linux.h",
     "binding.c",
     "binding.js",
     "CMakeLists.txt",
