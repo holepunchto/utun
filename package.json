@@ -1,0 +1,33 @@
+{
+  "name": "bare-tun",
+  "version": "0.0.0",
+  "description": "Make TUN devices",
+  "main": "index.js",
+  "addon": true,
+  "scripts": {
+    "test": "standard"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/holepunchto/bare-tun.git"
+  },
+  "keywords": [
+    "utun",
+    "tun",
+    "vpn"
+  ],
+  "author": "Holepunch Inc.",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/holepunchto/bare-tun/issues"
+  },
+  "homepage": "https://github.com/holepunchto/bare-tun#readme",
+  "devDependencies": {
+    "standard": "^17.1.0"
+  },
+  "dependencies": {
+    "bare-pipe": "^3.3.2",
+    "bare-subprocess": "^3.1.0",
+    "which-runtime": "^1.2.0"
+  }
+}
