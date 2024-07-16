@@ -1,18 +1,18 @@
-# bare-tun
+# utun
 
 Make TUN devices
 
 ```
-npm install bare-tun
+npm i utun
 ```
 
 ## Usage
 
 ```js
-const TUN = require('bare-run')
+const UTUN = require('utun')
 const ip = require('ip-packet')
 
-const u = new TUN()
+const u = new UTUN()
 
 u.configure({
   ip: '10.22.0.10',

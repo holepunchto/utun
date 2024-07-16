@@ -1,12 +1,12 @@
-const binding = require('./binding')
 const Pipe = require('bare-pipe')
-const { isMac, isLinux } = require('which-runtime')
 const { spawn } = require('bare-subprocess')
+const { isMac, isLinux } = require('which-runtime')
+const binding = require('./binding')
 
 const IS_SUPPORTED = isLinux || isMac
 const MAC_HEADER = Buffer.from([0, 0, 0, 2])
 
-module.exports = class TUN extends Pipe {
+module.exports = class UTUN extends Pipe {
   constructor (opts = {}) {
     if (!IS_SUPPORTED) throw new Error('Unsupported platform')
 

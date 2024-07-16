@@ -1,34 +1,45 @@
 {
-  "name": "bare-tun",
-  "version": "0.0.0",
+  "name": "utun",
+  "version": "2.0.0",
   "description": "Make TUN devices",
-  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "binding.c",
+    "binding.js",
+    "CMakeLists.txt",
+    "prebuilds"
+  ],
+  "keywords": [
+    "utun",
+    "tun",
+    "vpn"
+  ],
   "addon": true,
   "scripts": {
     "test": "standard"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/holepunchto/bare-tun.git"
+    "url": "git+https://github.com/holepunchto/utun.git"
   },
-  "keywords": [
-    "utun",
-    "tun",
-    "vpn"
-  ],
-  "author": "Holepunch Inc.",
+  "author": "Holepunch",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/holepunchto/bare-tun/issues"
+    "url": "https://github.com/holepunchto/utun/issues"
   },
-  "homepage": "https://github.com/holepunchto/bare-tun#readme",
-  "devDependencies": {
-    "ip-packet": "^2.2.1",
-    "standard": "^17.1.0"
-  },
+  "homepage": "https://github.com/holepunchto/utun#readme",
   "dependencies": {
     "bare-pipe": "^3.3.2",
     "bare-subprocess": "^3.1.0",
+    "load-addon": "^1.0.0",
     "which-runtime": "^1.2.0"
+  },
+  "devDependencies": {
+    "ip-packet": "^2.2.1",
+    "standard": "^17.1.0"
   }
 }
