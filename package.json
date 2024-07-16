@@ -23,6 +23,7 @@
   },
   "homepage": "https://github.com/holepunchto/bare-tun#readme",
   "devDependencies": {
+    "ip-packet": "^2.2.1",
     "standard": "^17.1.0"
   },
   "dependencies": {

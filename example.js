@@ -1,4 +1,5 @@
 const TUN = require('./')
+const ip = require('ip-packet')
 
 const u = new TUN()
 
@@ -8,4 +9,6 @@ u.configure({
   route: '10.22.0.0/24'
 })
 
-u.on('data', console.log)
+u.on('data', function (buffer) {
+  console.log(ip.decode({ start: 0, end: buffer.byteLength, buffer }))
+})
