@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(utun C)
+find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
+find_package(cmake-napi REQUIRED PATHS node_modules/cmake-napi)
+find_package(cmake-npm REQUIRED PATHS node_modules/cmake-npm)
 
-include(bare)
-include(napi)
+project(utun C)
 
 bare_target(target)
 
@@ -31,14 +32,6 @@ endif()
 
 add_napi_module(utun_node)
 
-bare_include_directories(compat NAPI)
-
-target_include_directories(
-  ${utun_node}
-  PRIVATE
-    ${compat}
-)
-
 target_sources(
   ${utun_node}
   PRIVATE
@@ -58,3 +51,11 @@ elseif(target MATCHES "linux|android")
       UTUN_LINUX=1
   )
 endif()
+
+resolve_node_module(bare-compat-napi compat)
+
+target_include_directories(
+  ${utun_node}
+  PRIVATE
+    "${compat}/include"
+)

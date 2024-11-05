@@ -37,10 +37,14 @@
   "dependencies": {
     "bare-pipe": "^3.3.2",
     "bare-subprocess": "^3.1.0",
-    "load-addon": "^1.0.0",
+    "require-addon": "^1.0.2",
     "which-runtime": "^1.2.0"
   },
   "devDependencies": {
+    "bare-compat-napi": "^1.0.0",
+    "cmake-bare": "^1.1.15",
+    "cmake-napi": "^1.0.7",
+    "cmake-npm": "^1.0.2",
     "ip-packet": "^2.2.1",
     "standard": "^17.1.0"
   }
