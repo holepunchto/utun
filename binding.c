@@ -7,7 +7,7 @@
 #include <stdatomic.h>
 
 
-#define ifname_len 16
+#define IFNAME_MAXLEN 16
 
 #if UTUN_APPLE
 #include "apple.h"
@@ -40,7 +40,7 @@ typedef struct {
   js_ref_t *on_flush;
 
   int fd;
-  char ifname[ifname_len];
+  char ifname[IFNAME_MAXLEN];
 
   int closing;
 
@@ -299,7 +299,7 @@ utun_open (js_env_t *env, js_callback_info_t *info) {
   assert(argc > 2);
 
   if (argc > 3) { // ifname provided
-    err = js_get_value_string_utf8(env, argv[3], (utf8_t *) tun->ifname, ifname_len, NULL);
+    err = js_get_value_string_utf8(env, argv[3], (utf8_t *) tun->ifname, IFNAME_MAXLEN, NULL);
     assert(err == 0);
   }
 
