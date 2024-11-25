@@ -22,7 +22,8 @@
   ],
   "addon": true,
   "scripts": {
-    "test": "standard"
+    "test": "standard",
+    "lint": "standard"
   },
   "repository": {
     "type": "git",

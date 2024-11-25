@@ -1,7 +1,7 @@
 const mtu = 1000 // test data packet size (actual MTU = 1300)
 const END = Buffer.from([0x2])
 
-async function burst(transmit, mbits = 100, rounds = 10) {
+async function burst (transmit, mbits = 100, rounds = 10) {
   const rate = Math.floor((mbits / 8) * (1024 ** 2) / mtu)
 
   const begin = Buffer.allocUnsafe(9)
@@ -31,7 +31,7 @@ async function burst(transmit, mbits = 100, rounds = 10) {
     console.log('burst round', g,
       'sent', rate, 'packets',
       ms, 'ms', '(', mbits, 'mBit/s )',
-      ' (discard', discarded,')'
+      ' (discard', discarded, ')'
     )
     sumTime += ms
     sumDiscarded += discarded
@@ -42,7 +42,7 @@ async function burst(transmit, mbits = 100, rounds = 10) {
   console.log('burst complete, avg time', sumTime / rounds, 'ms, discarded', sumDiscarded)
 }
 
-function measure(subscribe, onfinish = noop) {
+function measure (subscribe, onfinish = noop) {
   let received = null
   let current = -1
   let timings = []
@@ -114,7 +114,7 @@ function measure(subscribe, onfinish = noop) {
       console.log(
         'round', round,
         'complete, loss', lost, '/', rate,
-        '(', (100 * (lost / rate)).toFixed(2),'%)',
+        '(', (100 * (lost / rate)).toFixed(2), '%)',
         (rate * mtu * 8 / (1024 ** 2)).toFixed(2), 'mBit/s'
       )
       // console.log(received[round])
@@ -132,7 +132,7 @@ function measure(subscribe, onfinish = noop) {
       const throughputBits = recv * mtu * 8 / (elapsed / 1000)
       console.log(
         'final loss', lost, '/', total,
-        '(', (100 * (lost / total)).toFixed(2),'%)',
+        '(', (100 * (lost / total)).toFixed(2), '%)',
         'recv', recv,
         'measured throughput', (throughputBits / (1024 ** 2)).toFixed(1), 'mBit/s'
       )

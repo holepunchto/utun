@@ -34,12 +34,12 @@ async function main () {
     ip: '10.22.0.12',
     netmask: '255.255.255.0',
     gateway: '10.22.0.0/24',
-    mtu: 1300,
+    mtu: 1300
   })
 
   // utun.on('data', packet => console.log('captured', packet))
   utun.on('error', err => console.error('utun:err', err))
-  const mbits = Number(Bare.argv[2] || 0)
+  const mbits = Number(globalThis.Bare.argv[2] || 0)
 
   if (mbits > 0) {
     console.log('injecting samples')

@@ -8,9 +8,9 @@
  * $ bare udxburst.js ADDRESS mBits
  */
 const UDX = require('udx-native')
-const { burst, measure} = require('./tools')
+const { burst, measure } = require('./tools')
 const port = 1911
-const addr = Bare.argv[2]
+const addr = globalThis.Bare.argv[2]
 
 if (addr) udxClient()
 else udxServer()
@@ -18,8 +18,8 @@ else udxServer()
 async function udxClient () {
   const u = new UDX()
   const socket = u.createSocket()
-  const mbps = parseInt(Bare.argv[3] || 10)
-  const rounds = parseInt(Bare.argv[4] || 10)
+  const mbps = parseInt(globalThis.Bare.argv[3] || 10)
+  const rounds = parseInt(globalThis.Bare.argv[4] || 10)
 
   socket.bind(0)
 
@@ -41,5 +41,3 @@ function udxServer () {
   socket.bind(port)
   measure(handler => socket.on('message', handler))
 }
-
-
