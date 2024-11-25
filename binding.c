@@ -440,7 +440,7 @@ utun_close (js_env_t *env, js_callback_info_t *info) {
 
   tun->closing = 1;
 
-  sem_post(&tun->write_wait);
+  uv_sem_post(&tun->write_wait);
   uv_thread_join(&tun->writer_id);
   uv_sem_destroy(&tun->write_wait);
 
