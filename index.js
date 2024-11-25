@@ -1,33 +1,65 @@
-const Pipe = require('bare-pipe')
+const binding = require('./binding')
 const { spawn } = require('bare-subprocess')
 const { isMac, isLinux } = require('which-runtime')
-const binding = require('./binding')
+const { EventEmitter } = require('bare-events')
 
 const IS_SUPPORTED = isLinux || isMac
-const MAC_HEADER = Buffer.from([0, 0, 0, 2])
 
-module.exports = class UTUN extends Pipe {
+module.exports = class UTUN extends EventEmitter {
   constructor (opts = {}) {
     if (!IS_SUPPORTED) throw new Error('Unsupported platform')
+    super()
 
     const defaultName = opts.name || 'tunnel0'
-    const nameBuffer = isLinux ? toCString(defaultName) : Buffer.allocUnsafe(1024)
-    const fd = binding.open(nameBuffer)
 
-    super(fd)
-
-    this._readableState.map = mapReadable
-    this._writableState.map = mapWritable
-
-    this.fd = fd
-    this.name = nameBuffer.slice(0, nameBuffer.indexOf(0)).toString()
+    this.handle = binding.open(
+      this,
+      this._onread,
+      this._onflush,
+      defaultName
+    )
+    this.name = this.info().name
     this.ip = null
     this.netmask = null
     this.mtu = 0
     this.route = null
   }
 
-  IS_SUPPORTED = IS_SUPPORTED
+  static IS_SUPPORTED = IS_SUPPORTED
+
+  _onread (buffer) {
+    this.emit('data', Buffer.from(buffer))
+  }
+
+  _onflush (userCallback) {
+    queueMicrotask(userCallback)
+  }
+
+  write (buffer) {
+    return new Promise((resolve, reject) => {
+      const n = binding.write(this.handle, buffer, onflush)
+      if (n < 0) reject(new Error('write error: ' + n))
+
+      function onflush () {
+        if (!n) resolve(this.write(buffer)) // try re-queue
+        else resolve() // accepted
+      }
+    })
+  }
+
+  tryWrite (buffer) {
+    const n = binding.write(this.handle, buffer)
+    if (n < 0) throw new Error('write error: ' + n)
+    return n
+  }
+
+  info (resetAfterRead = false) {
+    return binding.info(this.handle, resetAfterRead)
+  }
+
+  close () {
+    binding.close(this.handle)
+  }
 
   async configure ({ ip, mtu, netmask, route }) {
     if (ip) this.ip = ip
@@ -59,26 +91,14 @@ module.exports = class UTUN extends Pipe {
 }
 
 function run (cmd, ...args) {
-  const proc = spawn(cmd, [...args])
-
+  // console.log('$', cmd, args.join(' ')) // TODO: remove
+  const proc = spawn(cmd, args)
   return new Promise(function (resolve, reject) {
+    const out = []
+    proc.on('data', chunk => out.push(chunk))
     proc.on('exit', function (code) {
-      if (code) reject(new Error('Failed: ' + code))
-      else resolve()
+      if (code) reject(new Error('Failed: ' + code + ' cmd:' + [cmd, ...args].join(' ')))
+      else resolve(out.length && out.join(''))
     })
   })
-}
-
-function toCString (str) {
-  const buf = Buffer.alloc(Buffer.byteLength(str) + 1)
-  buf.write(str)
-  return buf
-}
-
-function mapReadable (data) {
-  return isMac ? data.subarray(4) : data
-}
-
-function mapWritable (data) {
-  return isMac ? Buffer.concat([MAC_HEADER, data]) : data
 }

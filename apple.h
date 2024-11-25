@@ -1,10 +1,10 @@
 #include <fcntl.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/ioctl.h>
 #include <sys/kern_control.h>
 #include <sys/kern_event.h>
 #include <sys/socket.h>
-#include <unistd.h>
 
 #define UTUN_CONTROL_NAME "com.apple.net.utun_control"
 #define UTUN_OPT_IFNAME   2
@@ -40,9 +40,6 @@ utun_open__apple (char *ifname) {
   if (err != 0) goto err;
 
   ifname[ifname_len] = '\0';
-
-  err = fcntl(fd, F_SETFL, O_NONBLOCK);
-  if (err != 0) goto err;
 
   fcntl(fd, F_SETFD, FD_CLOEXEC);
   if (err != 0) goto err;
