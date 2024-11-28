@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <bare.h>
 #include <js.h>
+#include <sys/select.h>
 #include <uv.h>
 #include <stdlib.h>
 #include <stdatomic.h>
@@ -19,6 +20,7 @@
 #define tx_queue_len 32
 #define rx_queue_len 256
 #define rx_drop_backpressure 16
+#define READ_WAKE_USEC 25000 // 25ms
 
 typedef struct {
   size_t len;
@@ -85,11 +87,28 @@ typedef struct {
 void
 utun__read_loop (void* arg) {
   tunnel_t* tun = arg;
+  int fd = tun->fd;
+
+  fd_set read_set;
+  struct timeval timeout = {0};
+
   int n = 0;
   while (!tun->closing) {
+    FD_ZERO(&read_set);
+    FD_SET(fd, &read_set);
+    if (!timeout.tv_usec) timeout.tv_usec = READ_WAKE_USEC;
+
+    n = select(fd + 1, &read_set, NULL, NULL, &timeout);
+    assert(n >= 0);
+
+    if (n == 0) continue; // timeout
+
+    assert(FD_ISSET(fd, &read_set));
+
     rx_packet_t *pkt = &tun->rx.queue[tun->rx.captured];
 
-    n = read(tun->fd, pkt->buffer, sizeof(pkt->buffer));
+    n = read(fd, pkt->buffer, sizeof(pkt->buffer));
+
     if (n < 1) goto drop;
 
 #ifdef UTUN_APPLE
@@ -265,7 +284,6 @@ utun__on_flush (uv_async_t *handle) {
       err = js_delete_reference(env, msg->callback);
       assert(err == 0);
     }
-    memset(msg, 0, sizeof(tx_packet_t)); // not necessary
 
     tun->tx.flushed = (tun->tx.flushed + 1) % tx_queue_len;
   }
@@ -430,6 +448,7 @@ utun_close (js_env_t *env, js_callback_info_t *info) {
   int err;
   size_t argc = 1;
   js_value_t *argv[1];
+
   err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
   assert(err == 0);
   assert(argc == 1);
@@ -441,23 +460,36 @@ utun_close (js_env_t *env, js_callback_info_t *info) {
   tun->closing = 1;
 
   uv_sem_post(&tun->write_wait);
-  uv_thread_join(&tun->writer_id);
+
+  err = uv_thread_join(&tun->writer_id); // does not block
+  assert(err == 0);
+
   uv_sem_destroy(&tun->write_wait);
 
   tun->tx.sent = tun->tx.pending; // mark everything sent
   utun__on_flush(&tun->signals.flush); // release all usercb refs
 
-  const char unblok_read[22] = { 0 };
-  err = write(tun->fd, &unblok_read, 1);
-  assert(err == 1);
-
-  uv_thread_join(&tun->reader_id); // TODO: interrupt read()
+  err = uv_thread_join(&tun->reader_id); // blocks max 25ms
+  assert(err == 0);
 
   err = close(tun->fd);
   assert(err == 0);
 
+  err = js_delete_reference(env, tun->ctx);
+  assert(err == 0);
+
+  err = js_delete_reference(env, tun->on_read);
+  assert(err == 0);
+
+  err = js_delete_reference(env, tun->on_flush);
+  assert(err == 0);
+
   err = js_delete_reference(env, tun->rx.buffer_ref);
   assert(err == 0);
+
+  // async confirmation
+  uv_close((uv_handle_t *) &tun->signals.drain, NULL);
+  uv_close((uv_handle_t *) &tun->signals.flush, NULL);
 
   js_value_t *ret;
   js_get_null(env, &ret);

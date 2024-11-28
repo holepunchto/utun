@@ -22,8 +22,9 @@
   ],
   "addon": true,
   "scripts": {
-    "test": "standard",
-    "lint": "standard"
+    "test": "sudo bare test.js",
+    "lint": "standard",
+    "debug": "sudo node inspect test.js"
   },
   "repository": {
     "type": "git",
@@ -42,6 +43,7 @@
   },
   "devDependencies": {
     "bare-compat-napi": "^1.0.0",
+    "brittle": "^3.7.0",
     "cmake-bare": "^1.1.15",
     "cmake-napi": "^1.0.7",
     "cmake-npm": "^1.0.2",

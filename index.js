@@ -91,13 +91,13 @@ module.exports = class UTUN extends EventEmitter {
 }
 
 function run (cmd, ...args) {
-  // console.log('$', cmd, args.join(' ')) // TODO: remove
+  // console.log('$', cmd, args.join(' '))
   const proc = spawn(cmd, args)
   return new Promise(function (resolve, reject) {
     const out = []
     proc.on('data', chunk => out.push(chunk))
     proc.on('exit', function (code) {
-      if (code) reject(new Error('Failed: ' + code + ' cmd:' + [cmd, ...args].join(' ')))
+      if (code) reject(new Error('Failed: ' + code + ' cmd:' + [cmd, ...args].join(' ') + '\n' + out.join('')))
       else resolve(out.length && out.join(''))
     })
   })
