@@ -40,7 +40,18 @@ test('receive packet', async t => {
   socket.bind(0)
 
   for (let i = 0; i < 10; i++) {
-    await socket.send(Buffer.from('world'), 1911, '10.22.0.253')
+    /** BUG!
+     * Linux sets up automatic route to provided net so
+     * tun.configure({ ..., route: '10.22.0.x/24'} }) throws error 'already exists'.
+     * Also packets to local v-ip are not looped into tunnel by default.
+     *
+     * Apple on the other hand does not seem to receive packets destined to the
+     * v-net without adding a route. But for some reason packets to local v-ip are captured.
+     */
+
+    // Quickfix for now:
+    await socket.send(Buffer.from('world'), 1911, '10.22.0.99') // captured on linux
+    await socket.send(Buffer.from('world'), 1911, tun.ip) // captured on apple
   }
 
   const message = await captured

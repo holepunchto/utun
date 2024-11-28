@@ -17,9 +17,8 @@
 #endif
 
 // tuned using benchmark/[ipc|udx]burst.js
-#define tx_queue_len 32
-#define rx_queue_len 256
-#define rx_drop_backpressure 16
+#define TX_QUEUE_LEN 32
+#define RX_QUEUE_LEN 256
 #define READ_WAKE_USEC 25000 // 25ms
 
 typedef struct {
@@ -44,7 +43,7 @@ typedef struct {
   int fd;
   char ifname[IFNAME_MAXLEN];
 
-  int closing;
+  atomic_int closing;
 
   struct {
     uv_async_t drain;
@@ -57,7 +56,7 @@ typedef struct {
   uv_sem_t write_wait;
 
   struct {
-    tx_packet_t queue[tx_queue_len];
+    tx_packet_t queue[TX_QUEUE_LEN];
 
     atomic_int flushed;
     atomic_int pending;
@@ -69,14 +68,13 @@ typedef struct {
     js_ref_t *buffer_ref;
 
     atomic_int captured;
-    atomic_int drained; // modified by both threads
+    atomic_int drained;
   } rx;
 
   struct {
     uint32_t rx_packets;
     uint32_t rx_bytes;
     uint32_t rx_drop; // filtered + relieved backpressure
-    uint32_t rx_stagger; // bad
 
     uint32_t tx_packets;
     uint32_t tx_bytes;
@@ -96,6 +94,7 @@ utun__read_loop (void* arg) {
   while (!tun->closing) {
     FD_ZERO(&read_set);
     FD_SET(fd, &read_set);
+
     if (!timeout.tv_usec) timeout.tv_usec = READ_WAKE_USEC;
 
     n = select(fd + 1, &read_set, NULL, NULL, &timeout);
@@ -107,36 +106,26 @@ utun__read_loop (void* arg) {
 
     rx_packet_t *pkt = &tun->rx.queue[tun->rx.captured];
 
-    n = read(fd, pkt->buffer, sizeof(pkt->buffer));
+#if UTUN_APPLE
+    n = utun_read__apple(fd, pkt->buffer, sizeof(pkt->buffer));
+#elif UTUN_LINUX
+    n = utun_read__linux(fd, pkt->buffer, sizeof(pkt->buffer));
+#else
+    n = -1;
+#endif
 
     if (n < 1) goto drop;
-
-#ifdef UTUN_APPLE
-    // discard protocol info (simulate IFF_NO_PI)
-    assert(n > 4);
-    n -= 4;
-    memmove(pkt->buffer, pkt->buffer + 4, n);
-#endif
 
     pkt->len = n;
 
     if (pkt->buffer[0] != 0x45) goto drop; // skip non-ipv4 for now.
 
-    tun->stats.rx_packets++;
-    tun->stats.rx_bytes += n;
-
-    const int next = (tun->rx.captured + 1) % rx_queue_len;
-
-    // handle backpressure; safely push drain cursor
-    const int next_drain = (next + rx_drop_backpressure) % rx_queue_len;
-    int tmp = next;
-
-    int did_overflow = atomic_compare_exchange_weak(&tun->rx.drained, &tmp, next_drain);
-    if (did_overflow) {
-      tun->stats.rx_drop += rx_drop_backpressure; // undrained packets dropped
-    }
+    const int next = (tun->rx.captured + 1) % RX_QUEUE_LEN;
+    if (tun->rx.drained == next) goto drop; // buffer full
 
     tun->rx.captured = next;
+    tun->stats.rx_packets++;
+    tun->stats.rx_bytes += n;
 
     uv_async_send(&tun->signals.drain);
 
@@ -186,15 +175,7 @@ utun__on_drain (uv_async_t *handle) {
 
     memcpy(output_buf, pkt->buffer, pkt->len);
 
-    const int next = (current + 1) % rx_queue_len;
-    int expected = current;
-    int success = atomic_compare_exchange_weak(&tun->rx.drained, &expected, next);
-
-    if (!success) { // overflowed while copying
-                    // output_buf is undefined
-      tun->stats.rx_stagger++;
-      continue; // skip callback
-    }
+    tun->rx.drained = (current + 1) % RX_QUEUE_LEN;
 
     err = js_call_function(env, ctx, on_message, 1, argv, NULL);
     assert(err == 0);
@@ -208,11 +189,6 @@ utun__write_loop(void* arg) {
   tunnel_t *tun = arg;
   const int fd = tun->fd;
 
-#ifdef UTUN_APPLE
-  const size_t wrap_len = 2048;
-  char *wrapper = malloc(wrap_len);
-#endif
-
   while (!tun->closing) {
     if (tun->tx.sent == tun->tx.pending) { // all caught up
       uv_sem_wait(&tun->write_wait);
@@ -221,32 +197,24 @@ utun__write_loop(void* arg) {
 
     tx_packet_t *msg = &tun->tx.queue[tun->tx.sent];
 
-#ifdef UTUN_APPLE
-    assert(msg->len < wrap_len - 4); // TODO: unconditionally clamp writes to MTU regardless of OS
-    memcpy(&wrapper + 4, msg->buffer, msg->len);
-
-    // protocol ipv4
-    if (msg->buffer[0] == 0x45) *((uint32_t *) wrapper) = 0x02000000;
-
-    int n = write(fd, &wrapper, msg->len + 4);
-    assert(n == msg->len + 4);
+    int n;
+#if UTUN_APPLE
+    n = utun_write__apple(fd, msg->buffer, msg->len);
+#elif UTUN_LINUX
+    n = utun_write__linux(fd, msg->buffer, msg->len);
 #else
-    int n = write(fd, msg->buffer, msg->len);
-    assert(n == msg->len);
+    n = -1;
 #endif
+
+    assert(n == msg->len);
 
     tun->stats.tx_packets++;
     tun->stats.tx_bytes += msg->len;
 
     int do_flush = tun->tx.sent == tun->tx.flushed;
-    tun->tx.sent = (tun->tx.sent + 1) % tx_queue_len; // next
+    tun->tx.sent = (tun->tx.sent + 1) % TX_QUEUE_LEN; // next
     if (do_flush) uv_async_send(&tun->signals.flush);
   }
-
-
-#ifdef UTUN_APPLE
-  free(wrapper);
-#endif
 }
 
 void
@@ -285,7 +253,7 @@ utun__on_flush (uv_async_t *handle) {
       assert(err == 0);
     }
 
-    tun->tx.flushed = (tun->tx.flushed + 1) % tx_queue_len;
+    tun->tx.flushed = (tun->tx.flushed + 1) % TX_QUEUE_LEN;
   }
 
   err = js_close_handle_scope(env, scope);
@@ -346,7 +314,7 @@ utun_open (js_env_t *env, js_callback_info_t *info) {
   assert(err == 0);
 
   js_value_t *receive_buffer;
-  err = js_create_arraybuffer(env, rx_queue_len * sizeof(rx_packet_t), (void **) &tun->rx.queue, &receive_buffer);
+  err = js_create_arraybuffer(env, RX_QUEUE_LEN * sizeof(rx_packet_t), (void **) &tun->rx.queue, &receive_buffer);
   assert(err == 0);
 
   err = js_create_reference(env, receive_buffer, 1, &tun->rx.buffer_ref);
@@ -401,7 +369,7 @@ utun_write (js_env_t *env, js_callback_info_t *info) {
     goto reject;
   }
 
-  uint32_t next = (tun->tx.pending + 1) % tx_queue_len;
+  uint32_t next = (tun->tx.pending + 1) % TX_QUEUE_LEN;
 
   if (next == tun->tx.flushed) { // would overflow
     // attempt immediate flush
@@ -530,7 +498,6 @@ utun_info (js_env_t *env, js_callback_info_t *info) {
   set_int32("rxBytes", tun->stats.rx_bytes);
   set_int32("rxPackets", tun->stats.rx_packets);
   set_int32("rxDrop", tun->stats.rx_drop);
-  set_int32("rxStaggered", tun->stats.rx_stagger);
 
   set_int32("txBytes", tun->stats.tx_bytes);
   set_int32("txPackets", tun->stats.tx_packets);

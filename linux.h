@@ -42,3 +42,13 @@ utun_open__linux (char *ifname) {
 
   return fd;
 }
+
+static inline ssize_t
+utun_read__linux (const int fd, char *buffer, const size_t len) {
+  return read(fd, buffer, len);
+}
+
+static inline ssize_t
+utun_write__linux (const int fd, const char *buffer, const size_t len) {
+  return write(fd, buffer, len);
+}

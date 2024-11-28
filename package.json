@@ -22,7 +22,7 @@
   ],
   "addon": true,
   "scripts": {
-    "test": "sudo bare test.js",
+    "test": "sudo node test.js",
     "lint": "standard",
     "debug": "sudo node inspect test.js"
   },
@@ -37,8 +37,8 @@
   },
   "homepage": "https://github.com/holepunchto/utun#readme",
   "dependencies": {
-    "bare-subprocess": "^4.0.3",
-    "require-addon": "^1.0.2",
+    "bare-subprocess": "^5.0.0",
+    "require-addon": "1.0.4",
     "which-runtime": "^1.2.0"
   },
   "devDependencies": {
