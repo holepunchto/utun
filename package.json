@@ -38,7 +38,7 @@
   "homepage": "https://github.com/holepunchto/utun#readme",
   "dependencies": {
     "bare-subprocess": "^5.0.0",
-    "require-addon": "1.0.4",
+    "require-addon": "^1.0.6",
     "which-runtime": "^1.2.0"
   },
   "devDependencies": {
