@@ -31,7 +31,23 @@ u.on('data', function (buffer) {
 #### `new UTUN(opts = {})`
 
 `opts`
- - `name = 'tunnel0'` set interface name where supported
+- `name` set interface name where supported, defaults to `tunnel0`
+
+#### `async configure(opts)`
+Attempts to normalize interface configuration across
+platforms.
+
+`opts`
+- `ip` assigns address to interface
+- `netmask` sets netmask
+- `route` adds an additional route
+
+_note1:_ on linux the `route` option may have to be omitted as
+as system adds route `ip/netmask` to interface by default.\
+Use `ip route show` to verify routes after configure resolves.
+
+_note2:_ on mac, packets to local address (`utun.ip`) are captured by default.\
+Use `route -n` to verify routes after configure resolves.
 
 #### `async write(buffer)`
 
@@ -59,14 +75,13 @@ sample:
   rxBytes: 1188,
   rxPackets: 10,
   rxDrop: 5,
-  rxStaggered: 0,
   txBytes: 0,
   txPackets: 0,
   txRejected: 0
 }
 ```
 
-`reset` resets all counters zero after read.
+- `reset` resets all counters.
 
 ## License
 

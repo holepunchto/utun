@@ -6,7 +6,7 @@
 #include <uv.h>
 #include <stdlib.h>
 #include <stdatomic.h>
-
+#include <stdbool.h>
 
 #define IFNAME_MAXLEN 16
 
@@ -505,7 +505,7 @@ utun_info (js_env_t *env, js_callback_info_t *info) {
 
 #undef set_int32
 
-  _Bool do_reset = 0;
+  bool do_reset = false;
   if (argc > 1) {
     err = js_coerce_to_boolean(env, argv[1], &argv[1]);
     assert(err == 0);
