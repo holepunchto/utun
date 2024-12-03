@@ -24,9 +24,8 @@ test('send packet', async t => {
   t.is(message.toString(), 'hello', 'packet arrived on port')
 
   await socket.close()
-  tun.close()
+  await tun.close()
 })
-
 test('receive packet', async t => {
   const tun = new UTUN()
   await tun.configure({ ip: '10.22.0.12', netmask: '255.255.255.0' })
@@ -58,7 +57,7 @@ test('receive packet', async t => {
   t.is(message.toString(), 'world', 'packet captured')
 
   await socket.close()
-  tun.close()
+  await tun.close()
 })
 
 function matchUDP (cb) {

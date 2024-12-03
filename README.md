@@ -58,10 +58,9 @@ Transmits a packet on the tunnel device, resolves when packet is was enqueued.
 Same as write but does not retry when queue is full.
 Simply returns `boolean` indicating wether packet was accepted or not.
 
-#### `close()`
+#### `async close()`
 
 Closes the interface
-
 
 #### `info(reset = false)`
 

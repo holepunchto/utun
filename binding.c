@@ -19,7 +19,7 @@
 // tuned using benchmark/[ipc|udx]burst.js
 #define TX_QUEUE_LEN 32
 #define RX_QUEUE_LEN 256
-#define READ_WAKE_USEC 25000 // 25ms
+#define READ_WAKE_USEC 200000 // 200ms
 
 typedef struct {
   size_t len;
@@ -39,11 +39,13 @@ typedef struct {
 
   js_ref_t *on_read;
   js_ref_t *on_flush;
+  js_ref_t *on_close;
 
   int fd;
   char ifname[IFNAME_MAXLEN];
 
   atomic_int closing;
+  uv_work_t close_req;
 
   struct {
     uv_async_t drain;
@@ -136,8 +138,7 @@ drop:
 
     if (n < 0 && errno != EINTR) {
       perror("read error");
-      printf("n: %i, errno: %i\n", n, errno);
-      assert(0); // fatal, stop execution
+      assert(n < 0); // fatal, stop execution
     }
   }
 }
@@ -411,19 +412,61 @@ reject:
   return ret;
 }
 
-js_value_t *
-utun_close (js_env_t *env, js_callback_info_t *info) {
-  int err;
-  size_t argc = 1;
-  js_value_t *argv[1];
+static void
+utun__close_finish (uv_handle_t *handle) {
+  tunnel_t *tun = handle->data;
+  js_env_t *env = tun->env;
 
-  err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
-  assert(err == 0);
-  assert(argc == 1);
+  if (++tun->closing < 4) return;
 
-  tunnel_t *tun;
-  err = js_get_arraybuffer_info(env, argv[0], (void **) &tun, NULL);
+  int err = 0;
+
+  // call close handler
+  js_handle_scope_t *scope;
+  err = js_open_handle_scope(env, &scope);
   assert(err == 0);
+
+  js_value_t *ctx;
+  err = js_get_reference_value(env, tun->ctx, &ctx);
+  assert(err == 0);
+
+  js_value_t *callback;
+  err = js_get_reference_value(env, tun->on_close, &callback);
+  assert(err == 0);
+
+  err = js_call_function(env, ctx, callback, 0, NULL, NULL);
+  assert(err == 0);
+
+  err = js_close_handle_scope(env, scope);
+  assert(err == 0);
+
+  // delete references
+  err = js_delete_reference(env, tun->ctx);
+  assert(err == 0);
+
+  err = js_delete_reference(env, tun->on_read);
+  assert(err == 0);
+
+  err = js_delete_reference(env, tun->on_flush);
+  assert(err == 0);
+
+  err = js_delete_reference(env, tun->on_close);
+  assert(err == 0);
+
+  err = js_delete_reference(env, tun->rx.buffer_ref);
+  assert(err == 0);
+}
+
+static void
+utun__close_work_done (uv_work_t *handle, int status) {
+  assert(status == 0);
+  utun__close_finish((uv_handle_t *) handle);
+}
+
+static void
+utun__close_do_work (uv_work_t *handle) {
+  tunnel_t *tun = handle->data;
+  int err = 0;
 
   tun->closing = 1;
 
@@ -437,27 +480,40 @@ utun_close (js_env_t *env, js_callback_info_t *info) {
   tun->tx.sent = tun->tx.pending; // mark everything sent
   utun__on_flush(&tun->signals.flush); // release all usercb refs
 
-  err = uv_thread_join(&tun->reader_id); // blocks max 25ms
+  err = uv_thread_join(&tun->reader_id); // blocks upto READ_WAKE_USEC
   assert(err == 0);
 
   err = close(tun->fd);
   assert(err == 0);
 
-  err = js_delete_reference(env, tun->ctx);
+  uv_close((uv_handle_t *) &tun->signals.drain, utun__close_finish);
+  uv_close((uv_handle_t *) &tun->signals.flush, utun__close_finish);
+}
+
+js_value_t *
+utun_close_begin (js_env_t *env, js_callback_info_t *info) {
+  int err;
+  size_t argc = 2;
+  js_value_t *argv[2];
+
+  err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
+  assert(err == 0);
+  assert(argc == 2);
+
+  tunnel_t *tun;
+  err = js_get_arraybuffer_info(env, argv[0], (void **) &tun, NULL);
   assert(err == 0);
 
-  err = js_delete_reference(env, tun->on_read);
+  err = js_create_reference(env, argv[1], 1, &tun->on_close);
   assert(err == 0);
 
-  err = js_delete_reference(env, tun->on_flush);
+  uv_loop_t *loop;
+  err = js_get_env_loop(env, &loop);
   assert(err == 0);
 
-  err = js_delete_reference(env, tun->rx.buffer_ref);
+  tun->close_req.data = tun;
+  err = uv_queue_work(loop, &tun->close_req, utun__close_do_work, utun__close_work_done);
   assert(err == 0);
-
-  // async confirmation
-  uv_close((uv_handle_t *) &tun->signals.drain, NULL);
-  uv_close((uv_handle_t *) &tun->signals.flush, NULL);
 
   js_value_t *ret;
   js_get_null(env, &ret);
@@ -534,7 +590,7 @@ utun_exports (js_env_t *env, js_value_t *exports) {
   V("info", utun_info)
   V("open", utun_open)
   V("write", utun_write)
-  V("close", utun_close)
+  V("close", utun_close_begin)
 #undef V
 
   return exports;

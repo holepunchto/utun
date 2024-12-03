@@ -57,8 +57,11 @@ module.exports = class UTUN extends EventEmitter {
     return binding.info(this.handle, resetAfterRead)
   }
 
-  close () {
-    binding.close(this.handle)
+  async close () {
+    await new Promise(resolve => {
+      binding.close(this.handle, resolve)
+    })
+    this.emit('close')
   }
 
   async configure ({ ip, mtu, netmask, route }) {
