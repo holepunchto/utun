@@ -4,7 +4,7 @@ const UDX = require('udx-native')
 const ip = require('ip-packet')
 const { generatePacket } = require('./benchmark/tools')
 
-test.solo('send packet', async t => {
+test('send packet', async t => {
   const tun = new UTUN()
   await tun.configure({ ip: '10.22.0.12', netmask: '255.255.255.0' })
 
@@ -23,10 +23,8 @@ test.solo('send packet', async t => {
   const message = await received
   t.is(message.toString(), 'hello', 'packet arrived on port')
 
-  // TODO: swap these
   await socket.close()
   await tun.close()
-  console.log('G) test.js: await tun.close() resolved [END OF TEST]')
 })
 
 test('receive packet', async t => {

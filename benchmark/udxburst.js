@@ -10,7 +10,8 @@
 const UDX = require('udx-native')
 const { burst, measure } = require('./tools')
 const port = 1911
-const addr = globalThis.Bare.argv[2]
+const argv = globalThis.Bare?.argv || process.argv
+const addr = argv[2]
 
 if (addr) udxClient()
 else udxServer()
@@ -18,8 +19,8 @@ else udxServer()
 async function udxClient () {
   const u = new UDX()
   const socket = u.createSocket()
-  const mbps = parseInt(globalThis.Bare.argv[3] || 10)
-  const rounds = parseInt(globalThis.Bare.argv[4] || 10)
+  const mbps = parseInt(argv[3] || 10)
+  const rounds = parseInt(argv[4] || 10)
 
   socket.bind(0)
 

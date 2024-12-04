@@ -1,6 +1,7 @@
 const binding = require('./binding')
 const { isMac, isLinux, isBare } = require('which-runtime')
 const { EventEmitter } = require('bare-events')
+
 const { spawn } = require(isBare && 'bare-subprocess' || 'child_process')
 
 const IS_SUPPORTED = isLinux || isMac
@@ -59,18 +60,9 @@ module.exports = class UTUN extends EventEmitter {
 
   close () {
     return new Promise((resolve, reject) => {
-      const n = binding.close(this.handle, closed)
-
+      const n = binding.close(this.handle, resolve)
       if (n !== 0) reject(new Error('already closing'))
-
-      function closed () {
-        console.log('C) index.js: close handler, queueMicrotask(resolve)')
-        queueMicrotask(() => {
-          console.log('E) index.js: microtask called, Promise.resolve()')
-          resolve()
-        })
-      }
-    }).then(() => console.log('F) index.js: promise settled'))
+    })
   }
 
   async configure ({ ip, mtu, netmask, route }) {

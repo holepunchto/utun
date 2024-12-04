@@ -29,6 +29,8 @@ const UTUN = require('../index')
 const utun = new UTUN()
 let __pktId = 777
 
+const argv = globalThis.Bare?.argv || process.argv
+
 async function main () {
   await utun.configure({
     ip: '10.22.0.12',
@@ -38,7 +40,7 @@ async function main () {
 
   // utun.on('data', packet => console.log('captured', packet))
   utun.on('error', err => console.error('utun:err', err))
-  const mbits = Number(globalThis.Bare.argv[2] || 0)
+  const mbits = Number(argv[2] || 0)
 
   if (mbits > 0) {
     console.log('injecting samples')

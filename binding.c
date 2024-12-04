@@ -179,7 +179,7 @@ utun__on_drain (uv_async_t *handle) {
 
     tun->rx.drained = (current + 1) % RX_QUEUE_LEN;
 
-    err = js_call_function(env, ctx, on_message, 1, argv, NULL);
+    err = js_call_function_with_checkpoint(env, ctx, on_message, 1, argv, NULL);
     assert(err == 0);
   }
 
@@ -420,7 +420,6 @@ utun__close_finish (uv_handle_t *handle) {
   js_env_t *env = tun->env;
 
   if (--tun->pending_handles) return;
-  printf("A) binding.c: uv_thread_join() & uv_close() complete\n");
 
   // prepare close callback
   js_handle_scope_t *scope;
@@ -467,15 +466,12 @@ utun__close_finish (uv_handle_t *handle) {
   err = js_delete_reference(env, tun->ctx);
   assert(err == 0);
 
-  printf("B) binding.c: invoking js callback\n");
-
   // invoke close callback
-  err = js_call_function(env, ctx, callback, 0, NULL, NULL);
+  err = js_call_function_with_checkpoint(env, ctx, callback, 0, NULL, NULL);
   assert(err == 0);
 
   err = js_close_handle_scope(env, scope);
   assert(err == 0);
-  printf("D) binding.c: all refs/handles deleted, teardown complete\n");
 }
 
 static void
