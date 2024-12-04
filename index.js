@@ -57,11 +57,20 @@ module.exports = class UTUN extends EventEmitter {
     return binding.info(this.handle, resetAfterRead)
   }
 
-  async close () {
-    await new Promise(resolve => {
-      binding.close(this.handle, resolve)
-    })
-    this.emit('close')
+  close () {
+    return new Promise((resolve, reject) => {
+      const n = binding.close(this.handle, closed)
+
+      if (n !== 0) reject(new Error('already closing'))
+
+      function closed () {
+        console.log('C) index.js: close handler, queueMicrotask(resolve)')
+        queueMicrotask(() => {
+          console.log('E) index.js: microtask called, Promise.resolve()')
+          resolve()
+        })
+      }
+    }).then(() => console.log('F) index.js: promise settled'))
   }
 
   async configure ({ ip, mtu, netmask, route }) {

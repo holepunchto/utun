@@ -46,6 +46,7 @@ typedef struct {
 
   atomic_int closing;
   uv_work_t close_req;
+  int pending_handles;
 
   struct {
     uv_async_t drain;
@@ -84,7 +85,7 @@ typedef struct {
   } stats;
 } tunnel_t;
 
-void
+static void
 utun__read_loop (void* arg) {
   tunnel_t* tun = arg;
   int fd = tun->fd;
@@ -143,7 +144,7 @@ drop:
   }
 }
 
-void
+static void
 utun__on_drain (uv_async_t *handle) {
   int err = 0;
   tunnel_t *tun = handle->data;
@@ -185,7 +186,7 @@ utun__on_drain (uv_async_t *handle) {
   js_close_handle_scope(env, scope);
 }
 
-void
+static void
 utun__write_loop(void* arg) {
   tunnel_t *tun = arg;
   const int fd = tun->fd;
@@ -218,11 +219,13 @@ utun__write_loop(void* arg) {
   }
 }
 
-void
+static void
 utun__on_flush (uv_async_t *handle) {
   int err;
   tunnel_t *tun = handle->data;
   js_env_t *env = tun->env;
+
+  if (tun->closing) return;
 
   js_handle_scope_t *scope;
   err = js_open_handle_scope(env, &scope);
@@ -245,10 +248,8 @@ utun__on_flush (uv_async_t *handle) {
       err = js_get_reference_value(env, msg->callback, &argv[0]);
       assert(err == 0);
 
-      if (!tun->closing) {
-        err = js_call_function(env, ctx, cb, 1, argv, NULL);
-        assert(err == 0);
-      }
+      err = js_call_function(env, ctx, cb, 1, argv, NULL);
+      assert(err == 0);
 
       err = js_delete_reference(env, msg->callback);
       assert(err == 0);
@@ -414,14 +415,14 @@ reject:
 
 static void
 utun__close_finish (uv_handle_t *handle) {
+  int err = 0;
   tunnel_t *tun = handle->data;
   js_env_t *env = tun->env;
 
-  if (++tun->closing < 4) return;
+  if (--tun->pending_handles) return;
+  printf("A) binding.c: uv_thread_join() & uv_close() complete\n");
 
-  int err = 0;
-
-  // call close handler
+  // prepare close callback
   js_handle_scope_t *scope;
   err = js_open_handle_scope(env, &scope);
   assert(err == 0);
@@ -434,15 +435,25 @@ utun__close_finish (uv_handle_t *handle) {
   err = js_get_reference_value(env, tun->on_close, &callback);
   assert(err == 0);
 
-  err = js_call_function(env, ctx, callback, 0, NULL, NULL);
+  // delete all references
+  err = js_delete_reference(env, tun->rx.buffer_ref);
   assert(err == 0);
 
-  err = js_close_handle_scope(env, scope);
-  assert(err == 0);
+  tun->tx.sent = tun->tx.pending; // mark everything sent
 
-  // delete references
-  err = js_delete_reference(env, tun->ctx);
-  assert(err == 0);
+  while (tun->tx.flushed != tun->tx.sent) {
+    tx_packet_t *msg = &tun->tx.queue[tun->tx.flushed];
+
+    err = js_delete_reference(env, msg->buffer_ref);
+    assert(err == 0);
+
+    if (msg->callback) {
+      err = js_delete_reference(env, msg->callback);
+      assert(err == 0);
+    }
+
+    tun->tx.flushed = (tun->tx.flushed + 1) % TX_QUEUE_LEN;
+  }
 
   err = js_delete_reference(env, tun->on_read);
   assert(err == 0);
@@ -453,14 +464,29 @@ utun__close_finish (uv_handle_t *handle) {
   err = js_delete_reference(env, tun->on_close);
   assert(err == 0);
 
-  err = js_delete_reference(env, tun->rx.buffer_ref);
+  err = js_delete_reference(env, tun->ctx);
   assert(err == 0);
+
+  printf("B) binding.c: invoking js callback\n");
+
+  // invoke close callback
+  err = js_call_function(env, ctx, callback, 0, NULL, NULL);
+  assert(err == 0);
+
+  err = js_close_handle_scope(env, scope);
+  assert(err == 0);
+  printf("D) binding.c: all refs/handles deleted, teardown complete\n");
 }
 
 static void
-utun__close_work_done (uv_work_t *handle, int status) {
+utun__close_work_done (uv_work_t *req, int status) {
   assert(status == 0);
-  utun__close_finish((uv_handle_t *) handle);
+  tunnel_t *tun = req->data;
+
+  // close uv_sync_t signals after threads stopped
+  tun->pending_handles = 2;
+  uv_close((uv_handle_t *) &tun->signals.drain, utun__close_finish);
+  uv_close((uv_handle_t *) &tun->signals.flush, utun__close_finish);
 }
 
 static void
@@ -468,17 +494,12 @@ utun__close_do_work (uv_work_t *handle) {
   tunnel_t *tun = handle->data;
   int err = 0;
 
-  tun->closing = 1;
-
   uv_sem_post(&tun->write_wait);
 
-  err = uv_thread_join(&tun->writer_id); // does not block
+  err = uv_thread_join(&tun->writer_id);
   assert(err == 0);
 
   uv_sem_destroy(&tun->write_wait);
-
-  tun->tx.sent = tun->tx.pending; // mark everything sent
-  utun__on_flush(&tun->signals.flush); // release all usercb refs
 
   err = uv_thread_join(&tun->reader_id); // blocks upto READ_WAKE_USEC
   assert(err == 0);
@@ -486,13 +507,12 @@ utun__close_do_work (uv_work_t *handle) {
   err = close(tun->fd);
   assert(err == 0);
 
-  uv_close((uv_handle_t *) &tun->signals.drain, utun__close_finish);
-  uv_close((uv_handle_t *) &tun->signals.flush, utun__close_finish);
 }
 
-js_value_t *
+static js_value_t *
 utun_close_begin (js_env_t *env, js_callback_info_t *info) {
   int err;
+  js_value_t *ret;
   size_t argc = 2;
   js_value_t *argv[2];
 
@@ -503,6 +523,11 @@ utun_close_begin (js_env_t *env, js_callback_info_t *info) {
   tunnel_t *tun;
   err = js_get_arraybuffer_info(env, argv[0], (void **) &tun, NULL);
   assert(err == 0);
+
+  err = tun->closing;
+  if (err != 0) goto not_open;
+
+  tun->closing = 1;
 
   err = js_create_reference(env, argv[1], 1, &tun->on_close);
   assert(err == 0);
@@ -515,12 +540,12 @@ utun_close_begin (js_env_t *env, js_callback_info_t *info) {
   err = uv_queue_work(loop, &tun->close_req, utun__close_do_work, utun__close_work_done);
   assert(err == 0);
 
-  js_value_t *ret;
-  js_get_null(env, &ret);
+not_open:
+  js_create_int32(env, err, &ret);
   return ret;
 }
 
-js_value_t *
+static js_value_t *
 utun_info (js_env_t *env, js_callback_info_t *info) {
   size_t argc = 2;
   js_value_t *argv[2];
