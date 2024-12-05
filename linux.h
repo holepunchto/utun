@@ -31,14 +31,7 @@ utun_open__linux (char *ifname) {
     return err;
   }
 
-  strcpy(ifname, ifr.ifr_name);
-
-  err = fcntl(fd, F_SETFL, O_NONBLOCK);
-  if (err != 0) {
-    perror("fcntl F_SETFL");
-    close(fd);
-    return err;
-  }
+  strncpy(ifname, ifr.ifr_name, IFNAMSIZ);
 
   err = fcntl(fd, F_SETFD, FD_CLOEXEC);
   if (err != 0) {
@@ -48,9 +41,14 @@ utun_open__linux (char *ifname) {
   }
 
   return fd;
+}
 
-err:
-  if (fd != -1) close(fd);
+static inline ssize_t
+utun_read__linux (const int fd, char *buffer, const size_t len) {
+  return read(fd, buffer, len);
+}
 
-  return err;
+static inline ssize_t
+utun_write__linux (const int fd, const char *buffer, const size_t len) {
+  return write(fd, buffer, len);
 }
