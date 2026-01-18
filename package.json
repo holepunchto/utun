@@ -6,6 +6,16 @@
     ".": "./index.js",
     "./package": "./package.json"
   },
+  "imports": {
+    "child_process": {
+      "bare": "bare-subprocess",
+      "default": "child_process"
+    },
+    "events": {
+      "bare": "bare-events",
+      "default": "events"
+    }
+  },
   "files": [
     "index.js",
     "apple.h",
