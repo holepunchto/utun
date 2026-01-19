@@ -1,8 +1,8 @@
 const binding = require('./binding')
-const { isMac, isLinux, isBare } = require('which-runtime')
-const { EventEmitter } = require('bare-events')
+const { isMac, isLinux } = require('which-runtime')
+const { EventEmitter } = require('events')
 
-const { spawn } = require(isBare && 'bare-subprocess' || 'child_process')
+const { spawn } = require('child_process')
 
 const IS_SUPPORTED = isLinux || isMac
 
