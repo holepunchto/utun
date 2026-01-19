@@ -38,6 +38,12 @@ target_sources(
     binding.c
 )
 
+target_compile_definitions(
+  ${utun_node}
+  PRIVATE
+    NAPI_VERSION=9
+)
+
 if(target MATCHES "darwin|ios")
   target_compile_definitions(
     ${utun_node}
